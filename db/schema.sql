@@ -7,14 +7,15 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 -- ── Products ──────────────────────────────────────────────────────────────────
--- all values are current
 CREATE TABLE IF NOT EXISTS products (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    sku         TEXT    UNIQUE,            -- optional stock-keeping unit
+    name        TEXT    NOT NULL UNIQUE,
+    description TEXT,
+    sku         TEXT    UNIQUE,
     category_id INTEGER REFERENCES categories(id),
     quantity    INTEGER NOT NULL DEFAULT 0,
-    price       REAL    NOT NULL DEFAULT 0.0
+    price       REAL    NOT NULL DEFAULT 0.0,
+    date_added  TEXT    NOT NULL DEFAULT (date('now'))
 );
 
 -- ── Customers ─────────────────────────────────────────────────────────────────
