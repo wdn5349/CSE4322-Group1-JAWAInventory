@@ -32,9 +32,9 @@ CREATE TABLE IF NOT EXISTS customers (
 -- Staff members who process sales.
 CREATE TABLE IF NOT EXISTS employees (
     id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    name  TEXT NOT NULL,
-    role  TEXT,                            
-    email TEXT UNIQUE
+    username  TEXT NOT NULL,                      
+    email TEXT UNIQUE,
+    password TEXT NOT NULL
 );
 
 -- ── Orders ────────────────────────────────────────────────────────────────────
