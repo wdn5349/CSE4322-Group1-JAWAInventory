@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS products (
     category_id INTEGER REFERENCES categories(id),
     quantity    INTEGER NOT NULL DEFAULT 0,
     price       REAL    NOT NULL DEFAULT 0.0,
+    unit        TEXT    NOT NULL DEFAULT 'each',
     date_added  TEXT    NOT NULL DEFAULT (date('now'))
 );
 

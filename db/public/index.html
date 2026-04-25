@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JAWA Inventory</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
+
+    header {
+      background: #1a3c5e;
+      color: white;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.4rem; }
+
+    main { padding: 32px; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .toolbar h2 { font-size: 1.2rem; color: #1a3c5e; }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      background: #f7f8fa;
+      padding: 12px 14px;
+      text-align: left;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #666;
+      border-bottom: 2px solid #e8e8e8;
+      white-space: nowrap;
+    }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafbfc; }
+    tbody tr.new-row { background: #fffbe6; }
+
+    tbody td {
+      padding: 10px 14px;
+      font-size: 0.92rem;
+      cursor: pointer;
+      min-width: 100px;
+      max-width: 260px;
+    }
+    td.date-col { cursor: default; color: #888; font-size: 0.85rem; min-width: 110px; }
+    td.unit-col { min-width: 90px; max-width: 120px; color: #555; }
+
+    td.editing { padding: 4px 6px; background: #eef4ff; }
+
+    td input, td select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #4a90d9;
+      border-radius: 4px;
+      font-size: 0.92rem;
+      outline: none;
+      background: white;
+    }
+    td input:focus, td select:focus { border-color: #1a3c5e; }
+
+    .add-row-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: #f7f8fa;
+      border: none;
+      border-top: 1px solid #e8e8e8;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #1a3c5e;
+      font-weight: bold;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .add-row-btn:hover { background: #e8f0fe; }
+
+    .empty-msg { padding: 40px; text-align: center; color: #aaa; }
+
+    /* Right-click context menu */
+    #ctx-menu {
+      display: none;
+      position: fixed;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      z-index: 1000;
+      overflow: hidden;
+      min-width: 150px;
+    }
+    #ctx-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #c0392b;
+    }
+    #ctx-menu button:hover { background: #fdf0ef; }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      color: white;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.3s;
+      z-index: 2000;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: #2d9e5f; }
+    #toast.error   { background: #c0392b; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>JAWA Inventory System</h1>
+</header>
+
+<main>
+  <div class="toolbar">
+    <h2>Products</h2>
+  </div>
+  <div class="card">
+    <table id="product-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Category</th>
+          <th>Unit Price</th>
+          <th>Unit</th>
+          <th>Quantity</th>
+          <th>Date Added</th>
+        </tr>
+      </thead>
+      <tbody id="product-tbody">
+        <tr><td colspan="7" class="empty-msg">Loading...</td></tr>
+      </tbody>
+    </table>
+    <button class="add-row-btn" id="add-row-btn">+ Add Item</button>
+  </div>
+</main>
+
+<!-- Right-click context menu -->
+<div id="ctx-menu">
+  <button id="ctx-delete">Delete Row</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  const UNITS = [
+    "each", "dozen",
+    "lb", "oz",
+    "fl oz", "gal", "qt", "pt", "L", "mL",
+    "g", "kg",
+    "ft", "yd",
+    "box", "case", "bag", "roll", "pack"
+  ];
+
+  let categories = [];
+  let products   = [];
+  let ctxTargetId = null;
+
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
+
+  async function fetchJSON(url, options) {
+    const res  = await fetch(url, options);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+  }
+
+  // ── Load data ─────────────────────────────────────────────────────────────
+
+  async function init() {
+    try {
+      [categories, products] = await Promise.all([
+        fetchJSON("/api/categories"),
+        fetchJSON("/api/products"),
+      ]);
+      renderTable();
+    } catch (e) {
+      document.getElementById("product-tbody").innerHTML =
+        `<tr><td colspan="7" class="empty-msg" style="color:#c0392b">Error loading data: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function renderTable() {
+    const tbody = document.getElementById("product-tbody");
+    if (products.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-msg">No products yet. Click "+ Add Item" to get started.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = "";
+    for (const p of products) {
+      tbody.appendChild(buildRow(p));
+    }
+  }
+
+  function buildRow(p) {
+    const tr = document.createElement("tr");
+    tr.dataset.id = p.id;
+
+    tr.appendChild(makeCell("name",        p.name        || ""));
+    tr.appendChild(makeCell("description", p.description || ""));
+    tr.appendChild(makeCatCell(p.category || "", p.category_id || ""));
+    tr.appendChild(makeCell("price",    formatPrice(p.price), "number"));
+    tr.appendChild(makeUnitCell(p.unit  || "each"));
+    tr.appendChild(makeCell("quantity", p.quantity ?? "", "number"));
+
+    const dateTd = document.createElement("td");
+    dateTd.className   = "date-col";
+    dateTd.textContent = p.date_added || "";
+    tr.appendChild(dateTd);
+
+    addRowListeners(tr);
+    return tr;
+  }
+
+  function makeCell(field, value, inputType) {
+    const td = document.createElement("td");
+    td.dataset.field = field;
+    td.dataset.value = value;
+    td.textContent   = value;
+    if (inputType) td.dataset.inputType = inputType;
+    return td;
+  }
+
+  function makeCatCell(catName, catId) {
+    const td = document.createElement("td");
+    td.dataset.field   = "category_id";
+    td.dataset.value   = catId;
+    td.dataset.display = catName;
+    td.textContent     = catName;
+    return td;
+  }
+
+  function makeUnitCell(unit) {
+    const td = document.createElement("td");
+    td.className       = "unit-col";
+    td.dataset.field   = "unit";
+    td.dataset.value   = unit;
+    td.textContent     = unit;
+    return td;
+  }
+
+  function formatPrice(val) {
+    const n = parseFloat(val);
+    return isNaN(n) ? "" : n.toFixed(2);
+  }
+
+  // ── Row event listeners ───────────────────────────────────────────────────
+
+  function addRowListeners(tr) {
+    tr.querySelectorAll("td[data-field]").forEach((td) => {
+      td.addEventListener("click",       () => startEdit(td));
+      td.addEventListener("contextmenu", (e) => showCtxMenu(e, tr.dataset.id));
+    });
+    const dateTd = tr.querySelector(".date-col");
+    if (dateTd) dateTd.addEventListener("contextmenu", (e) => showCtxMenu(e, tr.dataset.id));
+  }
+
+  // ── Inline editing ────────────────────────────────────────────────────────
+
+  function startEdit(td) {
+    if (td.querySelector("input, select")) return;
+
+    const field     = td.dataset.field;
+    const value     = td.dataset.value;
+    const inputType = td.dataset.inputType;
+
+    td.classList.add("editing");
+    td.textContent = "";
+
+    let input;
+
+    if (field === "category_id") {
+      input = document.createElement("select");
+      input.innerHTML = '<option value="">-- None --</option>';
+      for (const c of categories) {
+        const opt = document.createElement("option");
+        opt.value       = c.id;
+        opt.textContent = c.name;
+        if (String(c.id) === String(value)) opt.selected = true;
+        input.appendChild(opt);
+      }
+    } else if (field === "unit") {
+      input = document.createElement("select");
+      for (const u of UNITS) {
+        const opt = document.createElement("option");
+        opt.value       = u;
+        opt.textContent = u;
+        if (u === value) opt.selected = true;
+        input.appendChild(opt);
+      }
+    } else {
+      input = document.createElement("input");
+      input.type  = inputType === "number" ? "number" : "text";
+      input.value = value;
+      if (inputType === "number") {
+        input.min  = "0";
+        input.step = field === "price" ? "0.01" : "1";
+      }
+    }
+
+    td.appendChild(input);
+    input.focus();
+    if (input.select) input.select();
+
+    input.addEventListener("blur",    () => finishEdit(td, input));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter")  input.blur();
+      if (e.key === "Escape") cancelEdit(td);
+    });
+  }
+
+  function cancelEdit(td) {
+    td.classList.remove("editing");
+    td.textContent = td.dataset.display || td.dataset.value;
+  }
+
+  async function finishEdit(td, input) {
+    const tr    = td.closest("tr");
+    const rowId = tr.dataset.id;
+    const field = td.dataset.field;
+
+    let newValue   = input.value;
+    let newDisplay = newValue;
+
+    // Validate numbers
+    if (td.dataset.inputType === "number") {
+      const num = parseFloat(newValue);
+      if (isNaN(num) || num < 0) {
+        showToast("Value must be a non-negative number.", "error");
+        cancelEdit(td);
+        return;
+      }
+      newValue   = field === "price" ? parseFloat(num.toFixed(2)) : Math.floor(num);
+      newDisplay = field === "price" ? newValue.toFixed(2) : String(newValue);
+    }
+
+    // Category display name
+    if (field === "category_id") {
+      const cat  = categories.find((c) => String(c.id) === String(newValue));
+      newDisplay = cat ? cat.name : "";
+    }
+
+    // Nothing changed
+    if (String(newValue) === String(td.dataset.value)) {
+      cancelEdit(td);
+      return;
+    }
+
+    td.classList.remove("editing");
+    td.textContent     = newDisplay;
+    td.dataset.value   = newValue;
+    td.dataset.display = newDisplay;
+
+    if (!rowId) {
+      maybeSaveNewRow(tr);
+      return;
+    }
+
+    await saveExistingRow(tr, rowId);
+  }
+
+  // ── Save existing row ─────────────────────────────────────────────────────
+
+  async function saveExistingRow(tr, id) {
+    const payload = buildPayload(tr);
+    if (!payload) return;
+    try {
+      await fetchJSON(`/api/products/${id}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      showToast("Saved.", "success");
+    } catch (e) {
+      showToast("Save failed: " + e.message, "error");
+      await reloadProducts();
+    }
+  }
+
+  // ── New row ───────────────────────────────────────────────────────────────
+
+  function addNewRow() {
+    if (document.querySelector("tr.new-row")) return;
+
+    const emptyRow = document.querySelector("#product-tbody td[colspan]");
+    if (emptyRow) emptyRow.closest("tr").remove();
+
+    const tr = document.createElement("tr");
+    tr.classList.add("new-row");
+
+    tr.appendChild(makeCell("name",        "", "text"));
+    tr.appendChild(makeCell("description", "", "text"));
+    tr.appendChild(makeCatCell("", ""));
+    tr.appendChild(makeCell("price",    "0.00", "number"));
+    tr.appendChild(makeUnitCell("each"));
+    tr.appendChild(makeCell("quantity", "0",    "number"));
+
+    const dateTd = document.createElement("td");
+    dateTd.className   = "date-col";
+    dateTd.textContent = "(auto)";
+    tr.appendChild(dateTd);
+
+    addRowListeners(tr);
+    document.getElementById("product-tbody").appendChild(tr);
+
+    startEdit(tr.querySelector('[data-field="name"]'));
+  }
+
+  async function maybeSaveNewRow(tr) {
+    const name = tr.querySelector('[data-field="name"]').dataset.value.trim();
+    if (!name) return;
+
+    const payload = buildPayload(tr);
+    if (!payload) return;
+
+    try {
+      await fetchJSON("/api/products", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      showToast("Product added!", "success");
+      await reloadProducts();
+    } catch (e) {
+      showToast("Could not save: " + e.message, "error");
+    }
+  }
+
+  // ── Build payload from row ────────────────────────────────────────────────
+
+  function buildPayload(tr) {
+    const get = (field) => tr.querySelector(`[data-field="${field}"]`)?.dataset.value ?? "";
+
+    const name = get("name").trim();
+    if (!name) { showToast("Name is required.", "error"); return null; }
+
+    const price    = parseFloat(get("price"));
+    const quantity = parseInt(get("quantity"));
+
+    if (isNaN(price)    || price    < 0) { showToast("Price must be a non-negative number.",    "error"); return null; }
+    if (isNaN(quantity) || quantity < 0) { showToast("Quantity must be a non-negative number.", "error"); return null; }
+
+    return {
+      name,
+      description: get("description").trim() || null,
+      category_id: get("category_id") || null,
+      price,
+      unit:        get("unit") || "each",
+      quantity,
+    };
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  function showCtxMenu(e, id) {
+    e.preventDefault();
+    ctxTargetId = id;
+    const menu = document.getElementById("ctx-menu");
+    menu.style.display = "block";
+    menu.style.left    = e.clientX + "px";
+    menu.style.top     = e.clientY + "px";
+  }
+
+  document.addEventListener("click", () => {
+    document.getElementById("ctx-menu").style.display = "none";
+  });
+
+  document.getElementById("ctx-delete").addEventListener("click", async () => {
+    if (!ctxTargetId) return;
+
+    if (!ctxTargetId || ctxTargetId === "undefined") {
+      document.querySelector("tr.new-row")?.remove();
+      return;
+    }
+
+    if (!confirm("Delete this product? This cannot be undone.")) return;
+
+    try {
+      await fetchJSON(`/api/products/${ctxTargetId}`, { method: "DELETE" });
+      showToast("Product deleted.", "success");
+      await reloadProducts();
+    } catch (e) {
+      showToast("Delete failed: " + e.message, "error");
+    }
+  });
+
+  // ── Reload ────────────────────────────────────────────────────────────────
+
+  async function reloadProducts() {
+    products = await fetchJSON("/api/products");
+    renderTable();
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+
+  function showToast(msg, type) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className   = "show " + (type || "");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = ""; }, 3000);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  document.getElementById("add-row-btn").addEventListener("click", addNewRow);
+
+  init();
+</script>
+</body>
+</html>

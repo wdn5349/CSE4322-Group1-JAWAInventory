@@ -5,7 +5,8 @@ const getAllProducts = (sortBy, callback) => {
     sortBy === "quantity" ? "p.quantity ASC" : "c.name ASC, p.name ASC";
   db.all(
     `
-        SELECT p.id, p.name, p.sku, p.quantity, p.price, c.name AS category
+        SELECT p.id, p.name, p.description, p.sku, p.category_id,
+               c.name AS category, p.quantity, p.price, p.unit, p.date_added
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         ORDER BY ${sort}
@@ -19,22 +20,22 @@ const getProductById = (id, callback) => {
   db.get(`SELECT * FROM products WHERE id = ?`, [id], callback);
 };
 
-const addProduct = ({ name, sku, category_id, quantity, price }, callback) => {
+const addProduct = ({ name, description, sku, category_id, quantity, price, unit }, callback) => {
   db.run(
-    `INSERT INTO products (name, sku, category_id, quantity, price) VALUES (?, ?, ?, ?, ?)`,
-    [name, sku, category_id, quantity, price],
+    `INSERT INTO products (name, description, sku, category_id, quantity, price, unit) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [name, description ?? null, sku ?? null, category_id ?? null, quantity, price, unit ?? "each"],
     callback,
   );
 };
 
 const updateProduct = (
   id,
-  { name, sku, category_id, quantity, price },
+  { name, description, sku, category_id, quantity, price, unit },
   callback,
 ) => {
   db.run(
-    `UPDATE products SET name=?, sku=?, category_id=?, quantity=?, price=? WHERE id=?`,
-    [name, sku, category_id, quantity, price, id],
+    `UPDATE products SET name=?, description=?, sku=?, category_id=?, quantity=?, price=?, unit=? WHERE id=?`,
+    [name, description ?? null, sku ?? null, category_id ?? null, quantity, price, unit ?? "each", id],
     callback,
   );
 };
