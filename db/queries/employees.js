@@ -4,14 +4,14 @@ const getAllEmployees = (callback) => {
   db.all(`SELECT * FROM employees ORDER BY name ASC`, [], callback);
 };
 
-const getEmployeeById = (id, callback) => {
-  db.get(`SELECT * FROM employees WHERE id = ?`, [id], callback);
+const getEmployeeByUsername = (username, callback) => {
+  db.get(`SELECT * FROM employees WHERE username = ?`, [username], callback);
 };
 
-const addEmployee = ({ name, role, email }, callback) => {
+const addEmployee = ({ username, email, password }, callback) => {
   db.run(
-    `INSERT INTO employees (name, role, email) VALUES (?, ?, ?)`,
-    [name, role, email],
+    `INSERT INTO employees (username, email, password) VALUES (?, ?, ?)`,
+    [username, email, password],
     callback,
   );
 };
@@ -30,7 +30,7 @@ const deleteEmployee = (id, callback) => {
 
 module.exports = {
   getAllEmployees,
-  getEmployeeById,
+  getEmployeeByUsername,
   addEmployee,
   updateEmployee,
   deleteEmployee,

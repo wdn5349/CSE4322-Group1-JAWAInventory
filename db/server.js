@@ -65,3 +65,30 @@ app.post("/api/categories", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Website running at http://localhost:${PORT}`);
 });
+
+
+
+const { addEmployee, getEmployeeByUsername } = require("./queries/employees");
+
+app.post("/register", (req, res) => {
+  addEmployee(req.body, function (err) {
+    if (err) {
+      return res.status(500).json({ error: "User already exists." });
+    }
+    res.json({ success: true });
+  });
+});
+
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+  
+  getEmployeeByUsername(username, (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (user && user.password === password) {
+      res.json({ success: true, message: "Welcome!" });
+    } else {
+      res.status(401).json({ error: "Invalid username or password" });
+    }
+  });
+});
