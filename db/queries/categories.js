@@ -28,10 +28,30 @@ const deleteCategory = (id, callback) => {
   db.run(`DELETE FROM categories WHERE id = ?`, [id], callback);
 };
 
+const findOrCreateCategory = (name, callback) => {
+  db.get(
+    `SELECT * FROM categories WHERE LOWER(name) = LOWER(?)`,
+    [name],
+    (err, row) => {
+      if (err) return callback(err);
+      if (row) return callback(null, row);
+      db.run(
+        `INSERT INTO categories (name) VALUES (?)`,
+        [name],
+        function (err2) {
+          if (err2) return callback(err2);
+          callback(null, { id: this.lastID, name });
+        }
+      );
+    }
+  );
+};
+
 module.exports = {
   getAllCategories,
   getCategoryById,
   addCategory,
   updateCategory,
   deleteCategory,
+  findOrCreateCategory,
 };

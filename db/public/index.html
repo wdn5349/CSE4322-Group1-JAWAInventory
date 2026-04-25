@@ -184,6 +184,7 @@
   <button id="ctx-delete">Delete Row</button>
 </div>
 
+<datalist id="category-datalist"></datalist>
 <div id="toast"></div>
 
 <script>
@@ -199,6 +200,16 @@
   let categories = [];
   let products   = [];
   let ctxTargetId = null;
+
+  function rebuildCategoryDatalist() {
+    const dl = document.getElementById("category-datalist");
+    dl.innerHTML = "";
+    for (const c of categories) {
+      const opt = document.createElement("option");
+      opt.value = c.name;
+      dl.appendChild(opt);
+    }
+  }
 
   // ── Fetch helpers ─────────────────────────────────────────────────────────
 
@@ -217,6 +228,7 @@
         fetchJSON("/api/categories"),
         fetchJSON("/api/products"),
       ]);
+      rebuildCategoryDatalist();
       renderTable();
     } catch (e) {
       document.getElementById("product-tbody").innerHTML =
@@ -316,15 +328,12 @@
     let input;
 
     if (field === "category_id") {
-      input = document.createElement("select");
-      input.innerHTML = '<option value="">-- None --</option>';
-      for (const c of categories) {
-        const opt = document.createElement("option");
-        opt.value       = c.id;
-        opt.textContent = c.name;
-        if (String(c.id) === String(value)) opt.selected = true;
-        input.appendChild(opt);
-      }
+      input = document.createElement("input");
+      input.type = "text";
+      input.setAttribute("list", "category-datalist");
+      input.autocomplete = "off";
+      const currentCat = categories.find((c) => String(c.id) === String(value));
+      input.value = currentCat ? currentCat.name : (td.dataset.display || "");
     } else if (field === "unit") {
       input = document.createElement("select");
       for (const u of UNITS) {
@@ -380,10 +389,33 @@
       newDisplay = field === "price" ? newValue.toFixed(2) : String(newValue);
     }
 
-    // Category display name
+    // Category: resolve typed name → existing or new category ID
     if (field === "category_id") {
-      const cat  = categories.find((c) => String(c.id) === String(newValue));
-      newDisplay = cat ? cat.name : "";
+      const typedName = input.value.trim();
+      if (!typedName) {
+        newValue   = "";
+        newDisplay = "";
+      } else {
+        let cat = categories.find((c) => c.name.toLowerCase() === typedName.toLowerCase());
+        if (!cat) {
+          try {
+            cat = await fetchJSON("/api/categories", {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify({ name: typedName }),
+            });
+            categories.push(cat);
+            categories.sort((a, b) => a.name.localeCompare(b.name));
+            rebuildCategoryDatalist();
+          } catch (e) {
+            showToast("Could not create category: " + e.message, "error");
+            cancelEdit(td);
+            return;
+          }
+        }
+        newValue   = cat.id;
+        newDisplay = cat.name;
+      }
     }
 
     // Nothing changed

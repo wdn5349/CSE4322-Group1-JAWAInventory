@@ -8,7 +8,7 @@ const {
   updateProduct,
   deleteProduct,
 } = require("./queries/products");
-const { getAllCategories } = require("./queries/categories");
+const { getAllCategories, findOrCreateCategory } = require("./queries/categories");
 
 const app = express();
 const PORT = 3000;
@@ -45,11 +45,20 @@ app.delete("/api/products/:id", (req, res) => {
   });
 });
 
-// Categories (for dropdown)
+// Categories
 app.get("/api/categories", (req, res) => {
   getAllCategories((err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
+  });
+});
+
+app.post("/api/categories", (req, res) => {
+  const name = (req.body.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Name is required." });
+  findOrCreateCategory(name, (err, category) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(category);
   });
 });
 
